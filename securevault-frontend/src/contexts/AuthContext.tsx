@@ -1,8 +1,15 @@
 // src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 import { apiFetch } from "@/lib/api";
 
-/* ---------------- TYPES ---------------- */
+/* ===================== TYPES ===================== */
+
 interface Session {
   id: string | number;
   userId: string | number;
@@ -47,13 +54,19 @@ interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<any>;
   logout: () => void;
 
-  addActivityLog: (action: string, details: string, severity?: string) => Promise<void>;
+  addActivityLog: (
+    action: string,
+    details: string,
+    severity?: string
+  ) => Promise<void>;
 
   enable2FA: () => Promise<string | null>;
   disable2FA: () => Promise<void>;
 
   getAllUsers: () => any[];
 }
+
+/* ===================== CONTEXT ===================== */
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -65,14 +78,17 @@ const safeParse = (val: string | null, fallback: any) => {
   }
 };
 
-/* ---------------- PROVIDER ---------------- */
+/* ===================== PROVIDER ===================== */
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any | null>(
     safeParse(localStorage.getItem("securevault_user"), null)
   );
+
   const [token, setToken] = useState<string | null>(
     localStorage.getItem("securevault_token")
   );
+
   const [isLoading, setIsLoading] = useState(true);
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -81,8 +97,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     safeParse(localStorage.getItem("securevault_alerts"), [])
   );
 
-  /** ⭐ Needed by Teams module */
+  // Teams module placeholder
   const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  /* ===================== INIT ===================== */
 
   useEffect(() => {
     if (!token) {
@@ -97,19 +115,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, [token]);
 
-  /* ---------------- USERS (Teams Module) ---------------- */
+  /* ===================== USERS ===================== */
+  // Backend does NOT have /api/users → avoid 404
   const loadUsers = async () => {
-    try {
-      // 🔥 FIX: Your backend has NO /api/users endpoint.
-      // So we avoid 404 errors and set empty list safely.
-      setAllUsers([]);
-      return [];
-    } catch {
-      setAllUsers([]);
-    }
+    setAllUsers([]);
+    return [];
   };
 
-  /* ---------------- LOAD SESSIONS ---------------- */
+  /* ===================== SESSIONS ===================== */
+
   const reloadSessions = async () => {
     if (!token) return;
 
@@ -121,7 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /* ---------------- LOAD ACTIVITY ---------------- */
+  /* ===================== ACTIVITY ===================== */
+
   const reloadActivity = async () => {
     if (!token) return;
 
@@ -133,7 +148,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /* ---------------- ALERT READ ---------------- */
+  /* ===================== ALERTS ===================== */
+
   const markAlertRead = (id: string) => {
     const updated = securityAlerts.map((a) =>
       a.id === id ? { ...a, isRead: true } : a
@@ -142,43 +158,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("securevault_alerts", JSON.stringify(updated));
   };
 
+  /* ===================== LOGIN ===================== */
+
   const login = async (email: string, password: string) => {
-  try {
-    const data = await apiFetch("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const data = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
 
-    // IF LOGIN FAILED (401 FROM BACKEND)
-    if (data.success === false) {
-      return { success: false, error: data.message };
+      if (data.success === false) {
+        return { success: false, error: data.message };
+      }
+
+      const loggedUser = {
+        email: data.email,
+        name: data.name,
+        role: data.role,
+      };
+
+      setToken(data.token);
+      setUser(loggedUser);
+
+      localStorage.setItem("securevault_token", data.token);
+      localStorage.setItem(
+        "securevault_user",
+        JSON.stringify(loggedUser)
+      );
+
+      await reloadSessions();
+      await reloadActivity();
+
+      return { success: true };
+    } catch {
+      return { success: false, error: "Server error" };
     }
+  };
 
-    // SUCCESS CASE
-    const loggedUser = {
-      email: data.email,
-      name: data.name,
-      role: data.role
-    };
+  /* ===================== SIGNUP ===================== */
 
-    setToken(data.token);
-    setUser(loggedUser);
-
-    localStorage.setItem("securevault_token", data.token);
-    localStorage.setItem("securevault_user", JSON.stringify(loggedUser));
-
-    await reloadSessions();
-    await reloadActivity();
-
-    return { success: true };
-
-  } catch (e) {
-    return { success: false, error: "Server error" };
-  }
-};
-
-  /* ---------------- SIGNUP ---------------- */
-  const signup = async (email, password, name) => {
+  const signup = async (
+    email: string,
+    password: string,
+    name: string
+  ) => {
     try {
       const data = await apiFetch("/auth/register", {
         method: "POST",
@@ -193,7 +216,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /* ---------------- ADD ACTIVITY LOG ---------------- */
+  /* ===================== ACTIVITY LOG ===================== */
+
   const addActivityLog = async (
     action: string,
     details: string,
@@ -207,22 +231,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       const saved = res?.data || res;
-
       setActivityLogs((prev) => [saved, ...prev]);
-    } catch (err) {
-      console.warn("addActivityLog failed", err);
-    }
+    } catch {}
   };
 
-  /* ---------------- 2FA ENABLE ---------------- */
+  /* ===================== 2FA ===================== */
+
   const enable2FA = async (): Promise<string | null> => {
     try {
-      const res = await apiFetch("/auth/2fa/enable", { method: "POST" });
+      const res = await apiFetch("/auth/2fa/enable", {
+        method: "POST",
+      });
+
       const secret = res?.secret ?? null;
 
       const updated = { ...user, twoFactorEnabled: true };
       setUser(updated);
-      localStorage.setItem("securevault_user", JSON.stringify(updated));
+      localStorage.setItem(
+        "securevault_user",
+        JSON.stringify(updated)
+      );
 
       addActivityLog("2fa_enable", "Enabled two-factor authentication");
       return secret;
@@ -231,20 +259,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /* ---------------- 2FA DISABLE ---------------- */
   const disable2FA = async () => {
     try {
       await apiFetch("/auth/2fa/disable", { method: "POST" });
 
       const updated = { ...user, twoFactorEnabled: false };
       setUser(updated);
-      localStorage.setItem("securevault_user", JSON.stringify(updated));
+      localStorage.setItem(
+        "securevault_user",
+        JSON.stringify(updated)
+      );
 
-      addActivityLog("2fa_disable", "Disabled two-factor authentication");
+      addActivityLog(
+        "2fa_disable",
+        "Disabled two-factor authentication"
+      );
     } catch {}
   };
 
-  /* ---------------- LOGOUT ---------------- */
+  /* ===================== LOGOUT ===================== */
+
   const logout = () => {
     localStorage.removeItem("securevault_token");
     localStorage.removeItem("securevault_user");
@@ -256,6 +290,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSecurityAlerts([]);
     setAllUsers([]);
   };
+
+  /* ===================== PROVIDER ===================== */
 
   return (
     <AuthContext.Provider
@@ -278,10 +314,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         enable2FA,
         disable2FA,
-
         addActivityLog,
 
-        /** ⭐ Used by Teams Module */
         getAllUsers: () => allUsers,
       }}
     >
@@ -290,8 +324,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/* ===================== HOOK ===================== */
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
   return ctx;
 }
