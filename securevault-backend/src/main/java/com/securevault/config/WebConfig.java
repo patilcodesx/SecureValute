@@ -13,12 +13,15 @@ public class WebConfig implements WebMvcConfigurer {
     private final SessionService sessionService;
     private final JwtUtil jwtUtil;
 
-    public WebConfig(UserService userService, SessionService sessionService, JwtUtil jwtUtil) {
+    public WebConfig(UserService userService,
+                     SessionService sessionService,
+                     JwtUtil jwtUtil) {
         this.userService = userService;
         this.sessionService = sessionService;
         this.jwtUtil = jwtUtil;
     }
 
+    // ✅ JWT INTERCEPTOR
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(
@@ -26,10 +29,22 @@ public class WebConfig implements WebMvcConfigurer {
         )
         .addPathPatterns("/api/**")
         .excludePathPatterns(
-                "/api/auth/**",
+                "/api/auth/**",     // login / register
+                "/api/share/**",    // public share
                 "/error",
-                "/actuator/**",
-                "/api/share/**"
+                "/actuator/**"
         );
     }
+
+    // ✅ CORS (ONLY PLACE – VERY IMPORTANT)
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOrigins("https://securevault-psi.vercel.app")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedHeaders("*")
+                .exposedHeaders("*")
+                .allowCredentials(true);
+    }
 }
+
